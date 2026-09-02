@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Gacha Budget">
+  <title>Gacha Budget v2.0</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="app-title">Gacha Budget <span class="version">v2.0</span></div>
+      <div class="app-subtitle">ソシャゲ課金専用・クラウド同期</div>
+    </div>
+    <div class="top-actions">
+      <span id="syncBadge" class="pill">未設定</span>
+      <button id="quickAddBtn" class="primary">＋ 課金</button>
+    </div>
+  </header>
+
+  <div id="authGate" class="auth-gate hidden">
+    <div class="auth-card">
+      <h1>Gacha Budget</h1>
+      <p class="muted">WindowsとiPhoneで同じ課金データを共有します。</p>
+      <div id="cloudSetupPane">
+        <h3>1. クラウド設定</h3>
+        <label>Supabase Project URL
+          <input id="sbUrl" type="url" placeholder="https://xxxxx.supabase.co">
+        </label>
+        <label>Supabase Publishable key / anon key
+          <textarea id="sbKey" placeholder="sb_publishable_... または eyJ..."></textarea>
+        </label>
+        <button id="saveCloudBtn" class="primary full">保存して接続</button>
+        <p class="small muted">このキーはブラウザ公開を前提としたキーです。データ保護はSupabaseのRLSで行います。</p>
+      </div>
+
+      <div id="loginPane" class="hidden">
+        <h3>2. ログイン</h3>
+        <label>メールアドレス<input id="authEmail" type="email" autocomplete="email"></label>
+        <label>パスワード<input id="authPassword" type="password" autocomplete="current-password"></label>
+        <div class="auth-actions">
+          <button id="loginBtn" class="primary">ログイン</button>
+          <button id="signupBtn" class="secondary">新規登録</button>
+        </div>
+        <button id="changeCloudBtn" class="ghost full">Supabase設定を変更</button>
+        <div id="authMessage" class="small"></div>
+      </div>
+    </div>
+  </div>
+
+  <main id="appShell" class="hidden">
+    <section id="home" class="page active"></section>
+    <section id="history" class="page"></section>
+    <section id="add" class="page"></section>
+    <section id="analysis" class="page"></section>
+    <section id="settings" class="page"></section>
+  </main>
+
+  <nav id="bottomNav" class="bottom-nav hidden">
+    <button data-page="home" class="active">ホーム</button>
+    <button data-page="history">履歴</button>
+    <button data-page="add">＋課金</button>
+    <button data-page="analysis">分析</button>
+    <button data-page="settings">設定</button>
+  </nav>
+
+  <dialog id="simDialog">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-header">
+        <h3>購入前チェック</h3>
+        <button value="cancel" class="icon-btn">×</button>
+      </div>
+      <div id="simContent"></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

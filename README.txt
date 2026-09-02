@@ -1,0 +1,24 @@
+Gacha Budget v2.0
+
+【主な変更】
+- Supabaseクラウド同期
+- Windows / iPhoneで同じデータを利用
+- メールアドレス＋パスワード認証
+- ローカルキャッシュ
+- オフライン時の入力保持と再接続時同期
+- v1.x localStorageデータの自動取り込み
+- PWA対応（iPhoneのホーム画面へ追加可能）
+- ゲーム名変更 / ゲーム追加機能を維持
+
+【重要】
+この版は https:// で公開して使用してください。
+file:// でindex.htmlを直接開く方式は、PWA・認証リダイレクト・Service Workerの都合で推奨しません。
+
+【Supabase】
+setup.sql を Supabase SQL Editor で実行してください。
+その後、アプリ初回起動時に Project URL と Publishable key / anon key を入力します。
+
+【同期方式】
+クラウドにはユーザーごとに1つのJSON状態を保存します。
+通常は端末内キャッシュへ即保存し、オンライン時にSupabaseへ同期します。
+複数端末で同時にオフライン編集した場合は、最後に同期した内容が優先されます。

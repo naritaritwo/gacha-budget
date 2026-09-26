@@ -211,10 +211,10 @@ async function hydrateFromCloud(){
     setSyncBadge("同期済み","ok");
   }
 }
-function markDirtyAndSave(){
+function markDirtyAndSave(renderOptions={}){
   saveLocal();
   const meta=getCloudMeta(); meta.dirty=true; setCloudMeta(meta);
-  renderAll();
+  renderAll(renderOptions);
   queueCloudSync();
 }
 function queueCloudSync(){
@@ -260,7 +260,7 @@ function projectedYear(){const m=currentMonth(),elapsed=Math.max(1,m-1);const pr
 function freeRemaining(){const m=currentMonth(),remainFrac=(13-m)/12;return remainingBudget()-annualFixed()*remainFrac}
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
-function switchPage(page){currentPage=page;document.querySelectorAll(".page").forEach(x=>x.classList.toggle("active",x.id===page));document.querySelectorAll(".bottom-nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===page));window.scrollTo({top:0,behavior:"smooth"})}
+function switchPage(page,{scroll=true}={}){currentPage=page;document.querySelectorAll(".page").forEach(x=>x.classList.toggle("active",x.id===page));document.querySelectorAll(".bottom-nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===page));if(scroll)window.scrollTo({top:0,behavior:"smooth"})}
 
 function renderHome(){
   const el=document.getElementById("home"),used=spentYear(),budget=Number(data.settings.annualBudget),remain=budget-used,prog=Math.max(0,Math.min(100,used/budget*100)),m=currentMonth(),mSpent=monthTotal(m),mLimit=avgRemainingPerMonth(),fixed=avgMonthlyFixed(),free=Math.max(0,mLimit-fixed),project=projectedYear();
@@ -307,7 +307,7 @@ function renderSettings(){
   <div style="height:14px"></div>
   <div class="card"><h2>バックアップ</h2><div class="form-actions"><button class="secondary" onclick="exportBackup()">JSONバックアップ</button><button class="ghost" onclick="document.getElementById('jsonInput').click()">JSON復元</button><input id="jsonInput" type="file" accept=".json,application/json" style="display:none" onchange="importBackup(event)"><button class="ghost" onclick="changeCloud()">Supabase設定変更</button></div></div>`;
 }
-function renderAll(){renderHome();renderHistory();renderAdd();renderAnalysis();renderSettings();switchPage(currentPage)}
+function renderAll({preserveScroll=false}={}){renderHome();renderHistory();renderAdd();renderAnalysis();renderSettings();switchPage(currentPage,{scroll:!preserveScroll})}
 
 function addTransaction(){const date=document.getElementById("txDate").value,gameId=document.getElementById("txGame").value,category=document.getElementById("txCategory").value,amount=Number(document.getElementById("txAmount").value),productName=document.getElementById("txProduct").value.trim(),memo=document.getElementById("txMemo").value.trim();if(!date||!gameId||!amount||amount<0){alert("日付・ゲーム・金額を確認してください。");return}const g=gameById(gameId);if(g?.spendingEnabled===false&&!confirm(`${g.name} は「課金停止」です。それでも登録しますか？`))return;data.transactions.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),date,gameId,category,amount,productName,memo});markDirtyAndSave();switchPage("home")}
 function deleteTx(id){if(!confirm("この課金記録を削除しますか？"))return;data.transactions=data.transactions.filter(t=>t.id!==id);markDirtyAndSave()}
@@ -319,7 +319,7 @@ function moveGame(id,direction){
   if(from<0||to<0||to>=data.games.length)return;
   const [game]=data.games.splice(from,1);
   data.games.splice(to,0,game);
-  markDirtyAndSave();
+  markDirtyAndSave({preserveScroll:true});
 }
 function makeGameId(){let id="game_"+Date.now().toString(36);while(data.games.some(g=>g.id===id))id+="_x";return id}
 function addGame(){const raw=prompt("追加するゲーム名を入力してください。");if(raw===null)return;const name=raw.trim();if(!name)return alert("ゲーム名を入力してください。");if(data.games.some(g=>g.name.trim().toLowerCase()===name.toLowerCase()))return alert("同じ名前のゲームがあります。");data.games.push({id:makeGameId(),name,status:"active",spendingEnabled:true});markDirtyAndSave()}

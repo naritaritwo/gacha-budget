@@ -301,7 +301,7 @@ function renderSettings(){
   <div style="height:14px"></div>
   <div class="card"><h2>予算設定</h2><div class="form-grid"><label>年度<input id="setYear" type="number" value="${data.settings.year}"></label><label>年間予算<input id="setAnnual" type="number" value="${data.settings.annualBudget}"></label><label>月間基準額<input id="setMonthly" type="number" value="${data.settings.monthlyReference}"></label></div><div class="form-actions"><button class="primary" onclick="saveSettings()">保存</button></div></div>
   <div style="height:14px"></div>
-  <div class="card"><div class="row wrap"><div><h2>ゲーム</h2><div class="muted small">名前変更・追加・課金停止</div></div><button class="secondary" onclick="addGame()">＋ゲーム追加</button></div><div class="list" style="margin-top:10px">${data.games.map(g=>`<div class="list-item ${g.spendingEnabled===false?"status-off":""}"><div><strong>${escapeHtml(g.name)}</strong><div class="muted small">${g.spendingEnabled===false?"課金停止":"課金可"}</div></div><div class="form-actions" style="margin-top:0"><button class="ghost" onclick="renameGame('${g.id}')">名前変更</button><button class="${g.spendingEnabled===false?"secondary":"danger-btn"}" onclick="toggleSpending('${g.id}')">${g.spendingEnabled===false?"課金再開":"課金停止"}</button></div></div>`).join("")}</div></div>
+  <div class="card"><div class="row wrap"><div><h2>ゲーム</h2><div class="muted small">並べ替え・名前変更・追加・課金停止</div></div><button class="secondary" onclick="addGame()">＋ゲーム追加</button></div><div class="list game-list" style="margin-top:10px">${data.games.map((g,index)=>`<div class="list-item game-list-item ${g.spendingEnabled===false?"status-off":""}"><div class="game-info"><strong>${escapeHtml(g.name)}</strong><div class="muted small">${g.spendingEnabled===false?"課金停止":"課金可"}</div></div><div class="game-actions"><div class="reorder-controls" aria-label="${escapeHtml(g.name)}の並べ替え"><button class="ghost reorder-btn" onclick="moveGame('${g.id}',-1)" ${index===0?"disabled":""} aria-label="${escapeHtml(g.name)}を上へ" title="上へ">↑</button><button class="ghost reorder-btn" onclick="moveGame('${g.id}',1)" ${index===data.games.length-1?"disabled":""} aria-label="${escapeHtml(g.name)}を下へ" title="下へ">↓</button></div><div class="form-actions game-edit-actions"><button class="ghost" onclick="renameGame('${g.id}')">名前変更</button><button class="${g.spendingEnabled===false?"secondary":"danger-btn"}" onclick="toggleSpending('${g.id}')">${g.spendingEnabled===false?"課金再開":"課金停止"}</button></div></div></div>`).join("")}</div></div>
   <div style="height:14px"></div>
   <div class="card"><div class="row wrap"><div><h2>固定課金</h2><div class="muted small">価格と周期は自由に修正できます。</div></div><button class="secondary" onclick="addSubscriptionPrompt()">＋追加</button></div><div class="table-wrap"><table><thead><tr><th>ゲーム</th><th>商品</th><th>金額</th><th>周期</th><th>有効</th><th></th></tr></thead><tbody>${data.subscriptions.map(s=>{const c=s.cycle==="days"?`${s.cycleValue}日ごと`:s.cycle==="annual"?`年${s.cycleValue}回`:"毎月";return `<tr><td>${escapeHtml(gameById(s.gameId)?.name||"")}</td><td>${escapeHtml(s.name)}</td><td>${yen(s.amount)}</td><td>${c}</td><td><input type="checkbox" ${s.active?"checked":""} onchange="toggleSub('${s.id}',this.checked)"></td><td><button class="ghost small" onclick="editSubscription('${s.id}')">編集</button></td></tr>`}).join("")}</tbody></table></div><div class="note-box" style="margin-top:12px">固定費予測：${yen(annualFixed())}/年（平均 ${yen(avgMonthlyFixed())}/月）</div></div>
   <div style="height:14px"></div>
@@ -313,6 +313,14 @@ function addTransaction(){const date=document.getElementById("txDate").value,gam
 function deleteTx(id){if(!confirm("この課金記録を削除しますか？"))return;data.transactions=data.transactions.filter(t=>t.id!==id);markDirtyAndSave()}
 function saveSettings(){data.settings.year=Number(document.getElementById("setYear").value);data.settings.annualBudget=Number(document.getElementById("setAnnual").value);data.settings.monthlyReference=Number(document.getElementById("setMonthly").value);markDirtyAndSave();alert("保存しました。")}
 function toggleSpending(id){const g=gameById(id);if(!g)return;g.spendingEnabled=!g.spendingEnabled;markDirtyAndSave()}
+function moveGame(id,direction){
+  const from=data.games.findIndex(g=>g.id===id);
+  const to=from+Number(direction);
+  if(from<0||to<0||to>=data.games.length)return;
+  const [game]=data.games.splice(from,1);
+  data.games.splice(to,0,game);
+  markDirtyAndSave();
+}
 function makeGameId(){let id="game_"+Date.now().toString(36);while(data.games.some(g=>g.id===id))id+="_x";return id}
 function addGame(){const raw=prompt("追加するゲーム名を入力してください。");if(raw===null)return;const name=raw.trim();if(!name)return alert("ゲーム名を入力してください。");if(data.games.some(g=>g.name.trim().toLowerCase()===name.toLowerCase()))return alert("同じ名前のゲームがあります。");data.games.push({id:makeGameId(),name,status:"active",spendingEnabled:true});markDirtyAndSave()}
 function renameGame(id){const g=gameById(id);if(!g)return;const old=g.name,raw=prompt("新しいゲーム名",old);if(raw===null)return;const n=raw.trim();if(!n||n===old)return;if(data.games.some(x=>x.id!==id&&x.name.toLowerCase()===n.toLowerCase()))return alert("同じ名前のゲームがあります。");if(data.legacyGameTotals&&Object.prototype.hasOwnProperty.call(data.legacyGameTotals,old)){data.legacyGameTotals[n]=Number(data.legacyGameTotals[n]||0)+Number(data.legacyGameTotals[old]||0);delete data.legacyGameTotals[old]}g.name=n;markDirtyAndSave()}
@@ -338,6 +346,6 @@ document.getElementById("changeCloudBtn").addEventListener("click",changeCloud);
 document.getElementById("quickAddBtn").addEventListener("click",()=>switchPage("add"));
 document.querySelectorAll(".bottom-nav button").forEach(b=>b.addEventListener("click",()=>switchPage(b.dataset.page)));
 
-Object.assign(window,{switchPage,addTransaction,deleteTx,saveSettings,toggleSpending,addGame,renameGame,toggleSub,editSubscription,addSubscriptionPrompt,openSimulation,openSimulationFromForm,refreshSimulation,exportCSV,exportBackup,importBackup,logout,changeCloud});
+Object.assign(window,{switchPage,addTransaction,deleteTx,saveSettings,toggleSpending,moveGame,addGame,renameGame,toggleSub,editSubscription,addSubscriptionPrompt,openSimulation,openSimulationFromForm,refreshSimulation,exportCSV,exportBackup,importBackup,logout,changeCloud});
 
 boot();

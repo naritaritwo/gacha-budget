@@ -301,7 +301,7 @@ function renderSettings(){
   <div style="height:14px"></div>
   <div class="card"><h2>予算設定</h2><div class="form-grid"><label>年度<input id="setYear" type="number" value="${data.settings.year}"></label><label>年間予算<input id="setAnnual" type="number" value="${data.settings.annualBudget}"></label><label>月間基準額<input id="setMonthly" type="number" value="${data.settings.monthlyReference}"></label></div><div class="form-actions"><button class="primary" onclick="saveSettings()">保存</button></div></div>
   <div style="height:14px"></div>
-  <div class="card"><div class="row wrap"><div><h2>ゲーム</h2><div class="muted small">並べ替え・名前変更・追加・課金停止</div></div><button class="secondary" onclick="addGame()">＋ゲーム追加</button></div><div class="list game-list" style="margin-top:10px">${data.games.map((g,index)=>`<div class="list-item game-list-item ${g.spendingEnabled===false?"status-off":""}"><div class="game-info"><strong>${escapeHtml(g.name)}</strong><div class="muted small">${g.spendingEnabled===false?"課金停止":"課金可"}</div></div><div class="game-actions"><div class="reorder-controls" aria-label="${escapeHtml(g.name)}の並べ替え"><button class="ghost reorder-btn" onclick="moveGame('${g.id}',-1)" ${index===0?"disabled":""} aria-label="${escapeHtml(g.name)}を上へ" title="上へ">↑</button><button class="ghost reorder-btn" onclick="moveGame('${g.id}',1)" ${index===data.games.length-1?"disabled":""} aria-label="${escapeHtml(g.name)}を下へ" title="下へ">↓</button></div><div class="form-actions game-edit-actions"><button class="ghost" onclick="renameGame('${g.id}')">名前変更</button><button class="${g.spendingEnabled===false?"secondary":"danger-btn"}" onclick="toggleSpending('${g.id}')">${g.spendingEnabled===false?"課金再開":"課金停止"}</button></div></div></div>`).join("")}</div></div>
+  <div class="card"><div class="row wrap"><div><h2>ゲーム</h2><div class="muted small">並べ替え・名前変更・追加・課金停止</div></div><button class="secondary" onclick="addGame()">＋ゲーム追加</button></div><div class="list game-list" style="margin-top:10px">${data.games.map((g,index)=>`<div class="list-item game-list-item ${g.spendingEnabled===false?"status-off":""}" data-game-id="${escapeHtml(g.id)}"><div class="game-info"><strong>${escapeHtml(g.name)}</strong><div class="muted small">${g.spendingEnabled===false?"課金停止":"課金可"}</div></div><div class="game-actions"><div class="reorder-controls" aria-label="${escapeHtml(g.name)}の並べ替え"><button class="ghost reorder-btn" onclick="moveGame('${g.id}',-1)" ${index===0?"disabled":""} aria-label="${escapeHtml(g.name)}を上へ" title="上へ">↑</button><button class="ghost reorder-btn" onclick="moveGame('${g.id}',1)" ${index===data.games.length-1?"disabled":""} aria-label="${escapeHtml(g.name)}を下へ" title="下へ">↓</button></div><div class="form-actions game-edit-actions"><button class="ghost" onclick="renameGame('${g.id}')">名前変更</button><button class="${g.spendingEnabled===false?"secondary":"danger-btn"}" onclick="toggleSpending('${g.id}')">${g.spendingEnabled===false?"課金再開":"課金停止"}</button></div></div></div>`).join("")}</div></div>
   <div style="height:14px"></div>
   <div class="card"><div class="row wrap"><div><h2>固定課金</h2><div class="muted small">価格と周期は自由に修正できます。</div></div><button class="secondary" onclick="addSubscriptionPrompt()">＋追加</button></div><div class="table-wrap"><table><thead><tr><th>ゲーム</th><th>商品</th><th>金額</th><th>周期</th><th>有効</th><th></th></tr></thead><tbody>${data.subscriptions.map(s=>{const c=s.cycle==="days"?`${s.cycleValue}日ごと`:s.cycle==="annual"?`年${s.cycleValue}回`:"毎月";return `<tr><td>${escapeHtml(gameById(s.gameId)?.name||"")}</td><td>${escapeHtml(s.name)}</td><td>${yen(s.amount)}</td><td>${c}</td><td><input type="checkbox" ${s.active?"checked":""} onchange="toggleSub('${s.id}',this.checked)"></td><td><button class="ghost small" onclick="editSubscription('${s.id}')">編集</button></td></tr>`}).join("")}</tbody></table></div><div class="note-box" style="margin-top:12px">固定費予測：${yen(annualFixed())}/年（平均 ${yen(avgMonthlyFixed())}/月）</div></div>
   <div style="height:14px"></div>
@@ -319,7 +319,21 @@ function moveGame(id,direction){
   if(from<0||to<0||to>=data.games.length)return;
   const [game]=data.games.splice(from,1);
   data.games.splice(to,0,game);
-  markDirtyAndSave({preserveScroll:true});
+  saveLocal();
+  const meta=getCloudMeta();meta.dirty=true;setCloudMeta(meta);
+  renderAdd();
+  const list=document.querySelector(".game-list");
+  const item=list?[...list.children].find(row=>row.dataset.gameId===id):null;
+  if(list&&item){
+    if(direction<0&&item.previousElementSibling)list.insertBefore(item,item.previousElementSibling);
+    if(direction>0&&item.nextElementSibling)list.insertBefore(item.nextElementSibling,item);
+    [...list.children].forEach((row,index)=>{
+      const buttons=row.querySelectorAll(".reorder-btn");
+      if(buttons[0])buttons[0].disabled=index===0;
+      if(buttons[1])buttons[1].disabled=index===list.children.length-1;
+    });
+  }
+  queueCloudSync();
 }
 function makeGameId(){let id="game_"+Date.now().toString(36);while(data.games.some(g=>g.id===id))id+="_x";return id}
 function addGame(){const raw=prompt("追加するゲーム名を入力してください。");if(raw===null)return;const name=raw.trim();if(!name)return alert("ゲーム名を入力してください。");if(data.games.some(g=>g.name.trim().toLowerCase()===name.toLowerCase()))return alert("同じ名前のゲームがあります。");data.games.push({id:makeGameId(),name,status:"active",spendingEnabled:true});markDirtyAndSave()}

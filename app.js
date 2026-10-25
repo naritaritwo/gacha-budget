@@ -259,6 +259,28 @@ function avgRemainingPerMonth(){return remainingBudget()/monthsRemaining()}
 function projectedYear(){const m=currentMonth(),elapsed=Math.max(1,m-1);const prev=Array.from({length:elapsed},(_,i)=>monthTotal(i+1)).reduce((a,b)=>a+b,0);const cur=monthTotal(m),future=12-m,run=cur>0?cur:avgMonthlyFixed();return prev+cur+future*Math.max(avgMonthlyFixed(),run)}
 function freeRemaining(){const m=currentMonth(),remainFrac=(13-m)/12;return remainingBudget()-annualFixed()*remainFrac}
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+// Keep the OS IME state unchanged. Only normalize characters entered in money fields.
+function normalizeMoney(v){return String(v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248)).replace(/[，,\s￥¥]/g,"").replace(/[^0-9]/g,"")}
+function setupMoneyInputs(root=document){
+  root.querySelectorAll('input[data-money]').forEach(el=>{
+    if(el.dataset.moneyReady==="1")return;
+    el.dataset.moneyReady="1";
+    let composing=false;
+    const normalize=()=>{
+      if(composing)return;
+      const before=el.value,after=normalizeMoney(before);
+      if(before===after)return;
+      const pos=el.selectionStart;
+      el.value=after;
+      if(pos!==null){const next=normalizeMoney(before.slice(0,pos)).length;try{el.setSelectionRange(next,next)}catch(e){}}
+    };
+    el.addEventListener("compositionstart",()=>{composing=true});
+    el.addEventListener("compositionend",()=>{composing=false;normalize()});
+    el.addEventListener("input",normalize);
+    el.addEventListener("blur",normalize);
+    el.addEventListener("change",normalize);
+  });
+}
 
 function switchPage(page,{scroll=true}={}){currentPage=page;document.querySelectorAll(".page").forEach(x=>x.classList.toggle("active",x.id===page));document.querySelectorAll(".bottom-nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===page));if(scroll)window.scrollTo({top:0,behavior:"smooth"})}
 
@@ -286,7 +308,7 @@ function renderHistory(){
 }
 function renderAdd(){
   const d=currentDateForBudget().toISOString().slice(0,10),games=data.games.filter(g=>g.status!=="retired");
-  document.getElementById("add").innerHTML=`<div class="card"><h2>課金を登録</h2><div class="form-grid"><label>日付<input id="txDate" type="date" value="${d}"></label><label>ゲーム<select id="txGame">${games.map(g=>`<option value="${g.id}">${escapeHtml(g.name)}${g.spendingEnabled===false?"（課金停止）":""}</option>`).join("")}</select></label><label>種類<select id="txCategory">${categories.map(c=>`<option>${c}</option>`).join("")}</select></label><label>金額<input id="txAmount" type="number" inputmode="decimal" min="0" step="1" placeholder="例: 1500"></label><label>商品名<input id="txProduct" type="text" placeholder="例: ハンタールート"></label><label>メモ<input id="txMemo" type="text" placeholder="任意"></label></div><div class="form-actions"><button class="primary" onclick="addTransaction()">登録</button><button class="secondary" onclick="openSimulationFromForm()">購入前チェック</button></div></div>`;
+  document.getElementById("add").innerHTML=`<div class="card"><h2>課金を登録</h2><div class="form-grid"><label>日付<input id="txDate" type="date" value="${d}"></label><label>ゲーム<select id="txGame">${games.map(g=>`<option value="${g.id}">${escapeHtml(g.name)}${g.spendingEnabled===false?"（課金停止）":""}</option>`).join("")}</select></label><label>種類<select id="txCategory">${categories.map(c=>`<option>${c}</option>`).join("")}</select></label><label>金額<input id="txAmount" type="text" data-money="1" placeholder="例: 1500"></label><label>商品名<input id="txProduct" type="text" placeholder="例: ハンタールート"></label><label>メモ<input id="txMemo" type="text" placeholder="任意"></label></div><div class="form-actions"><button class="primary" onclick="addTransaction()">登録</button><button class="secondary" onclick="openSimulationFromForm()">購入前チェック</button></div></div>`;
 }
 function gameSeries(){const sums={...(data.legacyGameTotals||{})};txInYear(data.settings.year).forEach(t=>{const n=gameById(t.gameId)?.name||"不明";sums[n]=(sums[n]||0)+Number(t.amount||0)});return Object.entries(sums).map(([name,amount])=>({name,amount})).sort((a,b)=>b.amount-a.amount)}
 function bars(items,labelKey,valueKey){const max=Math.max(1,...items.map(x=>Number(x[valueKey]||0)));return items.map(x=>`<div class="bar-row"><div class="bar-head"><span>${escapeHtml(String(x[labelKey]))}${labelKey==="month"?"月":""}</span><strong>${yen(x[valueKey])}</strong></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2,Number(x[valueKey]||0)/max*100)}%"></div></div></div>`).join("")}
@@ -307,9 +329,9 @@ function renderSettings(){
   <div style="height:14px"></div>
   <div class="card"><h2>バックアップ</h2><div class="form-actions"><button class="secondary" onclick="exportBackup()">JSONバックアップ</button><button class="ghost" onclick="document.getElementById('jsonInput').click()">JSON復元</button><input id="jsonInput" type="file" accept=".json,application/json" style="display:none" onchange="importBackup(event)"><button class="ghost" onclick="changeCloud()">Supabase設定変更</button></div></div>`;
 }
-function renderAll({preserveScroll=false}={}){renderHome();renderHistory();renderAdd();renderAnalysis();renderSettings();switchPage(currentPage,{scroll:!preserveScroll})}
+function renderAll({preserveScroll=false}={}){renderHome();renderHistory();renderAdd();renderAnalysis();renderSettings();setupMoneyInputs();switchPage(currentPage,{scroll:!preserveScroll})}
 
-function addTransaction(){const date=document.getElementById("txDate").value,gameId=document.getElementById("txGame").value,category=document.getElementById("txCategory").value,amount=Number(document.getElementById("txAmount").value),productName=document.getElementById("txProduct").value.trim(),memo=document.getElementById("txMemo").value.trim();if(!date||!gameId||!amount||amount<0){alert("日付・ゲーム・金額を確認してください。");return}const g=gameById(gameId);if(g?.spendingEnabled===false&&!confirm(`${g.name} は「課金停止」です。それでも登録しますか？`))return;data.transactions.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),date,gameId,category,amount,productName,memo});markDirtyAndSave();switchPage("home")}
+function addTransaction(){const date=document.getElementById("txDate").value,gameId=document.getElementById("txGame").value,category=document.getElementById("txCategory").value,amount=Number(normalizeMoney(document.getElementById("txAmount").value)),productName=document.getElementById("txProduct").value.trim(),memo=document.getElementById("txMemo").value.trim();if(!date||!gameId||!amount||amount<0){alert("日付・ゲーム・金額を確認してください。");return}const g=gameById(gameId);if(g?.spendingEnabled===false&&!confirm(`${g.name} は「課金停止」です。それでも登録しますか？`))return;data.transactions.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),date,gameId,category,amount,productName,memo});markDirtyAndSave();switchPage("home")}
 function deleteTx(id){if(!confirm("この課金記録を削除しますか？"))return;data.transactions=data.transactions.filter(t=>t.id!==id);markDirtyAndSave()}
 function saveSettings(){data.settings.year=Number(document.getElementById("setYear").value);data.settings.annualBudget=Number(document.getElementById("setAnnual").value);data.settings.monthlyReference=Number(document.getElementById("setMonthly").value);markDirtyAndSave();alert("保存しました。")}
 function toggleSpending(id){const g=gameById(id);if(!g)return;g.spendingEnabled=!g.spendingEnabled;markDirtyAndSave()}
@@ -343,9 +365,9 @@ function editSubscription(id){const s=data.subscriptions.find(x=>x.id===id);if(!
 function addSubscriptionPrompt(){const gameName=prompt("ゲーム名（完全一致）");if(!gameName)return;const g=data.games.find(x=>x.name===gameName);if(!g)return alert("登録済みゲーム名と一致しません。");const name=prompt("商品名");if(!name)return;const amount=Number(prompt("金額"));if(!amount)return;const cycle=prompt("周期タイプ: days / monthly / annual","monthly")||"monthly";const cycleValue=Number(prompt(cycle==="days"?"何日ごと？":cycle==="annual"?"年間何回？":"1","1")||1);data.subscriptions.push({id:"s"+Date.now(),gameId:g.id,name,amount,type:"その他",cycle,cycleValue,active:true});markDirtyAndSave()}
 
 function simulationMarkup(amount,gameId,category){const g=gameById(gameId),afterRemain=remainingBudget()-amount,afterFree=freeRemaining()-amount,nowP=projectedYear(),afterP=nowP+amount,b=Number(data.settings.annualBudget);return `<div class="stack"><div class="row"><span>ゲーム</span><strong>${escapeHtml(g?.name||"未指定")}</strong></div><div class="row"><span>種類</span><strong>${escapeHtml(category||"未指定")}</strong></div><div class="row"><span>購入予定</span><strong>${yen(amount)}</strong></div><hr><div class="row"><span>年間残額</span><strong>${yen(remainingBudget())} → ${yen(afterRemain)}</strong></div><div class="row"><span>自由課金残り目安</span><strong>${yen(freeRemaining())} → ${yen(afterFree)}</strong></div><div class="row"><span>年末予測</span><strong>${yen(nowP)} → ${yen(afterP)}</strong></div>${afterP>b?`<div class="warning-box">年間予算を ${yen(afterP-b)} 超過する予測です。</div>`:`<div class="success-box">現在の予測では年間予算内です。</div>`}</div>`}
-function openSimulation(amount=10000,gameId=data.games.find(g=>g.spendingEnabled)?.id,category="ガチャ・石"){const d=document.getElementById("simDialog");document.getElementById("simContent").innerHTML=`<div class="form-grid" style="margin-top:12px"><label>金額<input id="simAmount" type="number" inputmode="decimal" value="${amount}"></label><label>ゲーム<select id="simGame">${data.games.map(g=>`<option value="${g.id}" ${g.id===gameId?"selected":""}>${escapeHtml(g.name)}</option>`).join("")}</select></label><label>種類<select id="simCat">${categories.map(c=>`<option ${c===category?"selected":""}>${c}</option>`).join("")}</select></label></div><div class="form-actions"><button type="button" class="secondary" onclick="refreshSimulation()">再計算</button></div><div id="simResult" style="margin-top:14px">${simulationMarkup(amount,gameId,category)}</div>`;d.showModal()}
-function refreshSimulation(){const a=Number(document.getElementById("simAmount").value||0),g=document.getElementById("simGame").value,c=document.getElementById("simCat").value;document.getElementById("simResult").innerHTML=simulationMarkup(a,g,c)}
-function openSimulationFromForm(){const a=Number(document.getElementById("txAmount").value||0);if(!a)return alert("金額を入力してください。");openSimulation(a,document.getElementById("txGame").value,document.getElementById("txCategory").value)}
+function openSimulation(amount=10000,gameId=data.games.find(g=>g.spendingEnabled)?.id,category="ガチャ・石"){const d=document.getElementById("simDialog");document.getElementById("simContent").innerHTML=`<div class="form-grid" style="margin-top:12px"><label>金額<input id="simAmount" type="text" data-money="1" value="${amount}"></label><label>ゲーム<select id="simGame">${data.games.map(g=>`<option value="${g.id}" ${g.id===gameId?"selected":""}>${escapeHtml(g.name)}</option>`).join("")}</select></label><label>種類<select id="simCat">${categories.map(c=>`<option ${c===category?"selected":""}>${c}</option>`).join("")}</select></label></div><div class="form-actions"><button type="button" class="secondary" onclick="refreshSimulation()">再計算</button></div><div id="simResult" style="margin-top:14px">${simulationMarkup(amount,gameId,category)}</div>`;setupMoneyInputs(d);d.showModal()}
+function refreshSimulation(){const a=Number(normalizeMoney(document.getElementById("simAmount").value||0)),g=document.getElementById("simGame").value,c=document.getElementById("simCat").value;document.getElementById("simResult").innerHTML=simulationMarkup(a,g,c)}
+function openSimulationFromForm(){const a=Number(normalizeMoney(document.getElementById("txAmount").value||0));if(!a)return alert("金額を入力してください。");openSimulation(a,document.getElementById("txGame").value,document.getElementById("txCategory").value)}
 
 function csvEscape(v){const s=String(v??"");return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function exportCSV(){const rows=[["date","game","category","product","amount","memo"],...data.transactions.map(t=>[t.date,gameById(t.gameId)?.name||"",t.category,t.productName||"",t.amount,t.memo||""])];downloadText(`gacha-transactions-${data.settings.year}.csv`,rows.map(r=>r.map(csvEscape).join(",")).join("\n"),"text/csv;charset=utf-8")}
